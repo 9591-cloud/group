@@ -1,0 +1,215 @@
+import java.util.*;
+
+/**
+ * Mobile Queue Management System (Java Console Demo)
+ * Simulates queue registration, status checking, cancellation, and admin call-next.
+ * Notifications are simulated in the console; this is not a real mobile push-notification app.
+ */
+public class MobileQueueSystem {
+    private static final Scanner scanner = new Scanner(System.in);
+    private static final Queue<Ticket> waitingQueue = new LinkedList<>();
+    private static final Map<String, Ticket> allTickets = new LinkedHashMap<>();
+    private static int nextNumber = 1;
+    private static final int NOTIFY_WHEN_REMAINING = 3;
+
+    static class Ticket {
+        String queueId;
+        String passengerName;
+        String phone;
+        String status; // WAITING, SERVING, COMPLETED, CANCELLED
+        long createdAt;
+
+        Ticket(String queueId, String passengerName, String phone) {
+            this.queueId = queueId;
+            this.passengerName = passengerName;
+            this.phone = phone;
+            this.status = "WAITING";
+            this.createdAt = System.currentTimeMillis();
+        }
+    }
+
+    public static void main(String[] args) {
+        boolean running = true;
+        System.out.println("======================================");
+        System.out.println(" MOBILE QUEUE SYSTEM (DEMO)");
+        System.out.println("======================================");
+
+        while (running) {
+            printMenu();
+            int choice = readInt("Choose an option: ");
+
+            switch (choice) {
+                case 1 -> getQueue();
+                case 2 -> checkQueueStatus();
+                case 3 -> cancelQueue();
+                case 4 -> showWaitingList();
+                case 5 -> callNextQueue();
+                case 6 -> completeCurrentQueue();
+                case 0 -> {
+                    running = false;
+                    System.out.println("Thank you for using Mobile Queue System.");
+                }
+                default -> System.out.println("Invalid option. Please choose again.");
+            }
+        }
+        scanner.close();
+    }
+
+    private static void printMenu() {
+        System.out.println();
+        System.out.println("[1] Get a Queue");
+        System.out.println("[2] Check Queue Status");
+        System.out.println("[3] Cancel Queue");
+        System.out.println("[4] Admin: Show Waiting List");
+        System.out.println("[5] Admin: Call Next Queue");
+        System.out.println("[6] Admin: Complete Current Queue");
+        System.out.println("[0] Exit");
+    }
+
+    private static void getQueue() {
+        System.out.print("Enter passenger name: ");
+        String name = scanner.nextLine().trim();
+        if (name.isEmpty()) {
+            System.out.println("Name cannot be empty.");
+            return;
+        }
+
+        System.out.print("Enter phone number (demo only): ");
+        String phone = scanner.nextLine().trim();
+
+        String queueId = String.format("Q%03d", nextNumber++);
+        Ticket ticket = new Ticket(queueId, name, phone);
+        waitingQueue.offer(ticket);
+        allTickets.put(queueId, ticket);
+
+        System.out.println("\nQueue successfully created!");
+        System.out.println("Queue ID : " + queueId);
+        System.out.println("Name : " + name);
+        System.out.println("People ahead: " + peopleAhead(queueId));
+        System.out.println("Status : WAITING");
+        System.out.println("[Notification simulation] Your queue number is " + queueId + ".");
+
+        notifyUpcomingQueues();
+    }
+
+    private static void checkQueueStatus() {
+        System.out.print("Enter Queue ID (e.g., Q001): ");
+        String id = scanner.nextLine().trim().toUpperCase();
+        Ticket ticket = allTickets.get(id);
+
+        if (ticket == null) {
+            System.out.println("Queue ID not found.");
+            return;
+        }
+
+        System.out.println("Queue ID : " + ticket.queueId);
+        System.out.println("Name : " + ticket.passengerName);
+        System.out.println("Status : " + ticket.status);
+        if ("WAITING".equals(ticket.status)) {
+            int ahead = peopleAhead(id);
+            System.out.println("People ahead: " + ahead);
+            System.out.println("Estimated wait: " + (ahead * 5) + " minute(s) (demo estimate)");
+            if (ahead <= NOTIFY_WHEN_REMAINING) {
+                System.out.println("[Notification simulation] Your turn is getting close!");
+            }
+        }
+    }
+
+    private static void cancelQueue() {
+        System.out.print("Enter Queue ID to cancel: ");
+        String id = scanner.nextLine().trim().toUpperCase();
+        Ticket ticket = allTickets.get(id);
+
+        if (ticket == null) {
+            System.out.println("Queue ID not found.");
+            return;
+        }
+        if (!"WAITING".equals(ticket.status)) {
+            System.out.println("Only a WAITING queue can be cancelled.");
+            return;
+        }
+
+        ticket.status = "CANCELLED";
+        waitingQueue.remove(ticket);
+        System.out.println("Queue " + id + " has been cancelled.");
+        notifyUpcomingQueues();
+    }
+
+    private static void showWaitingList() {
+        if (waitingQueue.isEmpty()) {
+            System.out.println("No queues are waiting.");
+            return;
+        }
+
+        System.out.println("\n--- WAITING LIST ---");
+        int position = 1;
+        for (Ticket ticket : waitingQueue) {
+            System.out.printf("%d. %s | %s | %s%n",
+                    position++, ticket.queueId, ticket.passengerName, ticket.status);
+        }
+    }
+
+    private static void callNextQueue() {
+        if (waitingQueue.isEmpty()) {
+            System.out.println("No waiting queue to call.");
+            return;
+        }
+
+        Ticket next = waitingQueue.poll();
+        next.status = "SERVING";
+        System.out.println("\nNow serving " + next.queueId + " - " + next.passengerName);
+        System.out.println("[Notification simulation] " + next.queueId + ", please come to the service counter.");
+        notifyUpcomingQueues();
+    }
+
+    private static void completeCurrentQueue() {
+        Ticket serving = null;
+        for (Ticket ticket : allTickets.values()) {
+            if ("SERVING".equals(ticket.status)) {
+                serving = ticket;
+                break;
+            }
+        }
+
+        if (serving == null) {
+            System.out.println("There is no queue currently being served.");
+            return;
+        }
+        serving.status = "COMPLETED";
+        System.out.println("Queue " + serving.queueId + " marked as COMPLETED.");
+    }
+
+    private static int peopleAhead(String queueId) {
+        int position = 0;
+        for (Ticket ticket : waitingQueue) {
+            if (ticket.queueId.equals(queueId)) {
+                return position;
+            }
+            position++;
+        }
+        return 0;
+    }
+
+    private static void notifyUpcomingQueues() {
+        int position = 0;
+        for (Ticket ticket : waitingQueue) {
+            if (position < NOTIFY_WHEN_REMAINING) {
+                System.out.println("[Notification simulation] " + ticket.queueId
+                        + ": " + (position + 1) + " queue(s) from the front.");
+            }
+            position++;
+        }
+    }
+
+    private static int readInt(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String input = scanner.nextLine().trim();
+            try {
+                return Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                System.out.println("Please enter a number.");
+            }
+        }
+    }
+}
